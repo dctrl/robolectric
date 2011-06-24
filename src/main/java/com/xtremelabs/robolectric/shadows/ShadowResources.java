@@ -44,6 +44,9 @@ public class ShadowResources {
     public ShadowResources() {
         Configuration configuration = new Configuration();
         configuration.setToDefaults();
+        if (configuration.locale == null) {
+            configuration.locale = Locale.getDefault();
+        }
         setConfiguration(configuration);
     }
 

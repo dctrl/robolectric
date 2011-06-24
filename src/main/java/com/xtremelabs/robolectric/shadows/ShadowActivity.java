@@ -2,12 +2,15 @@ package com.xtremelabs.robolectric.shadows;
 
 import android.app.Activity;
 import android.app.Application;
+import android.app.Dialog;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.MenuInflater;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowManager;
 import com.xtremelabs.robolectric.Robolectric;
 import com.xtremelabs.robolectric.internal.Implementation;
 import com.xtremelabs.robolectric.internal.Implements;
@@ -27,7 +30,8 @@ import static com.xtremelabs.robolectric.Robolectric.shadowOf;
 @SuppressWarnings({"UnusedDeclaration"})
 @Implements(Activity.class)
 public class ShadowActivity extends ShadowContextWrapper {
-    @RealObject private Activity realActivity;
+    @RealObject
+    private Activity realActivity;
 
     private Intent intent;
     View contentView;
@@ -37,11 +41,13 @@ public class ShadowActivity extends ShadowContextWrapper {
     private Activity parent;
     private boolean finishWasCalled;
     private TestWindow window;
-
+    
     private List<IntentForResult> startedActivitiesForResults = new ArrayList<IntentForResult>();
 
     private Map<Intent, Integer> intentRequestCodeMap = new HashMap<Intent, Integer>();
-    private int requestedOrientation;
+    private int requestedOrientation = -1;
+    private View currentFocus;
+    private Integer lastShownDialogId = null;
 
     public void callOnCreate(Bundle bundle) {
         invokeReflectively("onCreate", Bundle.class, bundle);
@@ -128,7 +134,8 @@ public class ShadowActivity extends ShadowContextWrapper {
         return Robolectric.application;
     }
 
-    @Override @Implementation
+    @Override
+    @Implementation
     public final Application getApplicationContext() {
         return getApplication();
     }
@@ -196,6 +203,7 @@ public class ShadowActivity extends ShadowContextWrapper {
             return contentView.findViewById(id);
         } else {
             System.out.println("WARNING: you probably should have called setContentView() first");
+            Thread.dumpStack();
             return null;
         }
     }
@@ -211,6 +219,11 @@ public class ShadowActivity extends ShadowContextWrapper {
      */
     public void setParent(Activity parent){
         this.parent = parent;
+    }
+
+    @Implementation
+    public void onBackPressed() {
+        finish();
     }
 
     @Implementation
@@ -255,7 +268,12 @@ public class ShadowActivity extends ShadowContextWrapper {
     public void onDestroy() {
         assertNoBroadcastListenersRegistered();
     }
-
+    
+    @Implementation
+    public WindowManager getWindowManager() {
+        return (WindowManager) Robolectric.application.getSystemService(Context.WINDOW_SERVICE);
+    }    
+    
     @Implementation
     public void setRequestedOrientation(int requestedOrientation) {
         if (getParent() != null){
@@ -273,7 +291,7 @@ public class ShadowActivity extends ShadowContextWrapper {
             return this.requestedOrientation;
         }
     }
-
+    
     /**
      * Checks the {@code ApplicationContext} to see if {@code BroadcastListener}s are still registered.
      *
@@ -343,6 +361,20 @@ public class ShadowActivity extends ShadowContextWrapper {
     }
 
     /**
+     * Non-Android accessor Sets the {@code View} for this {@code Activity}
+     *
+     * @param view
+     */
+    public void setCurrentFocus(View view) {
+        currentFocus = view;
+    }
+
+    @Implementation
+    public View getCurrentFocus() {
+        return currentFocus;
+    }
+
+    /**
      * Container object to hold an Intent, together with the requestCode used
      * in a call to {@code Activity#startActivityForResult(Intent, int)}
      */
@@ -384,5 +416,51 @@ public class ShadowActivity extends ShadowContextWrapper {
         } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Implementation
+    public final void showDialog(int id) {
+        showDialog(id, null);
+    }
+
+    @Implementation
+    public final boolean showDialog(int id, Bundle bundle) {
+        Dialog dialog = null;
+        this.lastShownDialogId = id;
+        try {
+            Method method = Activity.class.getDeclaredMethod("onCreateDialog", Integer.TYPE);
+            method.setAccessible(true);
+            dialog = (Dialog) method.invoke(realActivity, id);
+
+            if (bundle == null) {
+                method = Activity.class.getDeclaredMethod("onPrepareDialog", Integer.TYPE, Dialog.class);
+                method.setAccessible(true);
+                method.invoke(realActivity, id, dialog);
+            } else {
+                method = Activity.class.getDeclaredMethod("onPrepareDialog", Integer.TYPE, Dialog.class, Bundle.class);
+                method.setAccessible(true);
+                method.invoke(realActivity, id, dialog, bundle);
+            }
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException(e);
+        } catch (InvocationTargetException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
+
+        dialog.show();
+
+        return true;
+    }
+
+    /**
+     * Non-Android accessor
+     *
+     * @return the dialog resource id passed into
+     *         {@code Activity#showDialog(int, Bundle)} or {@code Activity#showDialog(int)}
+     */
+    public Integer getLastShownDialogId() {
+        return lastShownDialogId;
     }
 }

@@ -38,5 +38,4 @@ public class ShadowProgressBar extends ShadowView {
   public int getProgress() {
     return progress;
   }
-
 }

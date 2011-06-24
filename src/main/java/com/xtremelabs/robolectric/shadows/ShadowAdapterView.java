@@ -17,25 +17,39 @@ import java.util.List;
 public class ShadowAdapterView extends ShadowViewGroup {
     @RealObject private AdapterView realAdapterView;
 
-    Adapter adapter;
+    private Adapter adapter;
+	private View mEmptyView;
     private AdapterView.OnItemSelectedListener onItemSelectedListener;
     private AdapterView.OnItemClickListener onItemClickListener;
     private boolean valid = false;
     private int selectedPosition;
+    private int itemCount = 0;
 
     private List<Object> previousItems = new ArrayList<Object>();
 
     @Implementation
     public void setAdapter(Adapter adapter) {
         this.adapter = adapter;
-        adapter.registerDataSetObserver(new AdapterViewDataSetObserver());
+
+        if (null != adapter) {
+            adapter.registerDataSetObserver(new AdapterViewDataSetObserver());
+        }
 
         invalidateAndScheduleUpdate();
         setSelection(0);
     }
+    
+    @Implementation
+    public void setEmptyView(View emptyView) {
+		this.mEmptyView = emptyView;
+		updateEmptyStatus(adapter == null || adapter.isEmpty());
+    }
 
     private void invalidateAndScheduleUpdate() {
         valid = false;
+        itemCount = adapter == null ? 0 : adapter.getCount();
+        updateEmptyStatus(itemCount == 0);
+        
         new Handler().post(new Runnable() {
             @Override
             public void run() {
@@ -45,6 +59,36 @@ public class ShadowAdapterView extends ShadowViewGroup {
                 }
             }
         });
+    }
+    
+    private void updateEmptyStatus(boolean empty) {
+    	// code taken from the real AdapterView and commented out where not (yet?) applicable
+    	
+    	// we don't deal with filterMode yet...
+//        if (isInFilterMode()) {
+//            empty = false;
+//        }
+
+        if (empty) {
+            if (mEmptyView != null) {
+                mEmptyView.setVisibility(View.VISIBLE);
+                setVisibility(View.GONE);
+            } else {
+                // If the caller just removed our empty view, make sure the list view is visible
+                setVisibility(View.VISIBLE);
+            }
+
+            // leave layout for the moment...
+//            // We are now GONE, so pending layouts will not be dispatched.
+//            // Force one here to make sure that the state of the list matches
+//            // the state of the adapter.
+//            if (mDataChanged) {
+//                this.onLayout(false, mLeft, mTop, mRight, mBottom);
+//            }
+        } else {
+            if (mEmptyView != null) mEmptyView.setVisibility(View.GONE);
+            setVisibility(View.VISIBLE);
+        }
     }
 
     /**
@@ -69,13 +113,19 @@ public class ShadowAdapterView extends ShadowViewGroup {
     }
 
     @Implementation
+    public Object getSelectedItem() {
+        int pos = getSelectedItemPosition();
+        return getItemAtPosition(pos);
+    }
+
+    @Implementation
     public Adapter getAdapter() {
         return adapter;
     }
 
     @Implementation
     public int getCount() {
-        return adapter.getCount();
+        return itemCount;
     }
 
     @Implementation
@@ -130,6 +180,11 @@ public class ShadowAdapterView extends ShadowViewGroup {
             return true;
         }
         return false;
+    }
+    
+    @Implementation
+    public View getEmptyView() {
+    	return mEmptyView;
     }
 
     private void update() {

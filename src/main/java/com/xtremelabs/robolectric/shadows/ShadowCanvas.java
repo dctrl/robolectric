@@ -70,6 +70,11 @@ public class ShadowCanvas {
     public void drawPaint(Paint paint) {
         drawnPaint = paint;
     }
+    
+    @Implementation
+    public void drawColor(int color) {
+    	appendDescription( "draw color " + color);
+    }
 
     @Implementation
     public void drawBitmap(Bitmap bitmap, float left, float top, Paint paint) {

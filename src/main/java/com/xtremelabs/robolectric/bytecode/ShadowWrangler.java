@@ -75,7 +75,7 @@ public class ShadowWrangler implements ClassHandler {
     }
 
     @Override
-    public Object methodInvoked(Class clazz, String methodName, Object instance, String[] paramTypes, Object[] params) throws Exception {
+    public Object methodInvoked(Class clazz, String methodName, Object instance, String[] paramTypes, Object[] params) throws Throwable {
         InvocationPlan invocationPlan = new InvocationPlan(clazz, methodName, instance, paramTypes);
         if (!invocationPlan.prepare()) {
             reportNoShadowMethodFound(clazz, methodName, paramTypes);
@@ -88,8 +88,7 @@ public class ShadowWrangler implements ClassHandler {
             throw new RuntimeException(invocationPlan.getShadow().getClass().getName() + " is not assignable from " +
                     invocationPlan.getDeclaredShadowClass().getName(), e);
         } catch (InvocationTargetException e) {
-            Throwable throwable = stripStackTrace(e.getCause());
-            throw throwable instanceof Exception ? (Exception) throwable : new Exception(throwable);
+            throw stripStackTrace(e.getCause());
         }
     }
 

@@ -2,6 +2,7 @@ package com.xtremelabs.robolectric.shadows;
 
 import android.content.Context;
 import android.text.format.DateFormat;
+
 import com.xtremelabs.robolectric.internal.Implementation;
 import com.xtremelabs.robolectric.internal.Implements;
 

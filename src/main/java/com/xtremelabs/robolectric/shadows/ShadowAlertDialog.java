@@ -3,6 +3,7 @@ package com.xtremelabs.robolectric.shadows;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.DialogInterface.OnCancelListener;
 import android.view.View;
 import android.widget.Button;
 import com.xtremelabs.robolectric.Robolectric;
@@ -94,7 +95,7 @@ public class ShadowAlertDialog extends ShadowDialog {
     public CharSequence[] getItems() {
         return items;
     }
-
+    
     /**
      * Non-Android accessor.
      *
@@ -113,6 +114,11 @@ public class ShadowAlertDialog extends ShadowDialog {
         return message;
     }
 
+    @Implementation
+    public void setMessage(CharSequence message) {
+        this.message = (message == null ? null : message.toString());
+    }
+
     /**
      * Non-Android accessor.
      *
@@ -124,6 +130,15 @@ public class ShadowAlertDialog extends ShadowDialog {
     }
 
     /**
+     * Non-Android accessor.
+     *
+     * @return the message displayed in the dialog
+     */
+    public boolean isCancelable() {
+        return isCancelable;
+    }
+    
+    /**
      * Shadows the {@code android.app.AlertDialog.Builder} class.
      */
     @Implements(AlertDialog.Builder.class)
@@ -133,6 +148,7 @@ public class ShadowAlertDialog extends ShadowDialog {
 
         private CharSequence[] items;
         private DialogInterface.OnClickListener clickListener;
+		private DialogInterface.OnCancelListener cancelListener;
         private String title;
         private String message;
         private Context context;
@@ -220,10 +236,16 @@ public class ShadowAlertDialog extends ShadowDialog {
             this.title = context.getResources().getString(titleId);
             return realBuilder;
         }
-
+        
         @Implementation
         public AlertDialog.Builder setMessage(CharSequence message) {
             this.message = message.toString();
+            return realBuilder;
+        }
+
+        @Implementation
+        public AlertDialog.Builder setMessage(int messageId) {
+            setMessage(context.getResources().getString(messageId));
             return realBuilder;
         }
 
@@ -235,12 +257,22 @@ public class ShadowAlertDialog extends ShadowDialog {
         }
 
         @Implementation
+        public AlertDialog.Builder setPositiveButton(int positiveTextId, final DialogInterface.OnClickListener listener) {
+        	return setPositiveButton(context.getResources().getText(positiveTextId), listener);
+        }
+
+        @Implementation
         public AlertDialog.Builder setNegativeButton(CharSequence text, final DialogInterface.OnClickListener listener) {
             this.negativeText = text;
             this.negativeListener = listener;
             return realBuilder;
         }
 
+        @Implementation
+        public AlertDialog.Builder setNegativeButton(int negativeTextId, final DialogInterface.OnClickListener listener) {
+        	return setNegativeButton(context.getResources().getString(negativeTextId), listener);
+        }
+        
         @Implementation
         public AlertDialog.Builder setNeutralButton(CharSequence text, final DialogInterface.OnClickListener listener) {
             this.neutralText = text;
@@ -249,9 +281,20 @@ public class ShadowAlertDialog extends ShadowDialog {
         }
 
         @Implementation
+        public AlertDialog.Builder setNeutralButton(int neutralTextId, final DialogInterface.OnClickListener listener) {
+        	return setNegativeButton(context.getResources().getText(neutralTextId), listener);
+        }
+        
+        @Implementation
         public AlertDialog.Builder setCancelable(boolean cancelable) {
             this.isCancelable = cancelable;
             return realBuilder;
+        }
+        
+        @Implementation
+        public AlertDialog.Builder setOnCancelListener(DialogInterface.OnCancelListener listener) {
+			this.cancelListener = listener;
+        	return realBuilder;
         }
 
         @Implementation
@@ -272,6 +315,7 @@ public class ShadowAlertDialog extends ShadowDialog {
             latestAlertDialog.title = title;
             latestAlertDialog.message = message;
             latestAlertDialog.clickListener = clickListener;
+            latestAlertDialog.setOnCancelListener(cancelListener);
             latestAlertDialog.isMultiItem = isMultiItem;
             latestAlertDialog.isSingleItem = isSingleItem;
             latestAlertDialog.checkedItemIndex = checkedItem;

@@ -6,13 +6,17 @@ import com.xtremelabs.robolectric.tester.org.apache.http.FakeHttpLayer;
 import com.xtremelabs.robolectric.tester.org.apache.http.RequestMatcher;
 import com.xtremelabs.robolectric.tester.org.apache.http.TestHttpResponse;
 import com.xtremelabs.robolectric.util.Strings;
+import junit.framework.Assert;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.conn.ConnectionKeepAliveStrategy;
+import org.apache.http.impl.client.BasicResponseHandler;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.client.DefaultRequestDirector;
+import org.apache.http.message.BasicHeader;
 import org.apache.http.protocol.HttpContext;
 import org.junit.After;
 import org.junit.Before;
@@ -220,7 +224,22 @@ public class DefaultRequestDirectorTest {
         ConnectionKeepAliveStrategy strategy = shadowOf((DefaultRequestDirector) Robolectric.getSentHttpRequestInfo(0).getRequestDirector()).getConnectionKeepAliveStrategy();
         assertSame(strategy, connectionKeepAliveStrategy);
     }
+    
+    @Test
+    public void shouldSupportBasicResponseHandlerHandleResponse() throws Exception {
+        Robolectric.addPendingHttpResponseWithContentType(200, "OK", new BasicHeader("Content-Type", "text/plain"));
 
+        DefaultHttpClient client = new DefaultHttpClient();
+        HttpResponse response = client.execute(new HttpGet("http://www.nowhere.org"));
+
+        assertThat(((HttpUriRequest) Robolectric.getSentHttpRequest(0)).getURI(),
+                equalTo(URI.create("http://www.nowhere.org")));
+
+        Assert.assertNotNull(response);
+        String responseStr = new BasicResponseHandler().handleResponse(response);
+        Assert.assertEquals("OK", responseStr);
+    }
+    
     @Test
     public void getNextSentHttpRequestInfo_shouldRemoveHttpRequestInfos() throws Exception {
         Robolectric.addPendingHttpResponse(200, "a happy response body");
@@ -239,5 +258,5 @@ public class DefaultRequestDirectorTest {
 
         assertSame(Robolectric.getNextSentHttpRequest(), httpGet);
         assertNull(Robolectric.getNextSentHttpRequest());
-    }
+    }    
 }

@@ -1,20 +1,25 @@
 package com.xtremelabs.robolectric.shadows;
 
+import android.R;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.animation.Animation;
+
 import com.xtremelabs.robolectric.Robolectric;
 import com.xtremelabs.robolectric.internal.Implementation;
 import com.xtremelabs.robolectric.internal.Implements;
 import com.xtremelabs.robolectric.internal.RealObject;
 import com.xtremelabs.robolectric.util.ReflectionUtil;
 import java.io.PrintStream;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,8 +27,11 @@ import java.util.Map;
 import static com.xtremelabs.robolectric.Robolectric.shadowOf;
 
 /**
- * Shadow implementation of {@code View} that simulates the behavior of this class. Supports listeners, focusability
- * (but not focus order), resource loading, visibility, tags, and tracks the size and shape of the view.
+ * Shadow implementation of {@code View} that simulates the behavior of this
+ * class.
+ *
+ * Supports listeners, focusability (but not focus order), resource loading,
+ * visibility, onclick, tags, and tracks the size and shape of the view.
  */
 @SuppressWarnings({"UnusedDeclaration"})
 @Implements(View.class)
@@ -61,9 +69,10 @@ public class ShadowView {
     private View.OnTouchListener onTouchListener;
     protected AttributeSet attributeSet;
     private boolean drawingCacheEnabled;
-    private Drawable backgroundDrawable;
+    private Drawable background = new ColorDrawable(R.color.transparent);
     private int measuredWidth;
     private int measuredHeight;
+    private Animation animation;
 
     public void __constructor__(Context context) {
         __constructor__(context, null);
@@ -87,11 +96,8 @@ public class ShadowView {
         applyVisibilityAttribute();
         applyEnabledAttribute();
         applyBackgroundAttribute();
+        applyTagAttribute();
         applyOnClickAttribute();
-    }
-
-    public View.OnClickListener getOnClickListener() {
-      return onClickListener;
     }
 
     @Implementation
@@ -209,6 +215,7 @@ public class ShadowView {
 
     @Implementation
     public void setBackgroundResource(int backgroundResourceId) {
+        this.background = this.getResources().getDrawable(backgroundResourceId);
         this.backgroundResourceId = backgroundResourceId;
     }
 
@@ -310,9 +317,9 @@ public class ShadowView {
 
     @Implementation
     public void draw(android.graphics.Canvas canvas) {
-        if (backgroundDrawable != null) {
+        if (background != null) {
             shadowOf(canvas).appendDescription("background:");
-            backgroundDrawable.draw(canvas);
+            background.draw(canvas);
         }
     }
 
@@ -502,6 +509,10 @@ public class ShadowView {
         return clickable;
     }
 
+    @Implementation
+    public Drawable getBackground() {
+        return background;
+    }
     /**
      * Non-Android accessor.
      *
@@ -513,6 +524,7 @@ public class ShadowView {
 
     @Implementation
     public void setBackgroundColor(int color) {
+        this.background = new ColorDrawable(getResources().getColor(color));
         backgroundColor = color;
     }
 
@@ -522,12 +534,7 @@ public class ShadowView {
 
     @Implementation
     public void setBackgroundDrawable(Drawable drawable){
-        backgroundDrawable = drawable;
-    }
-
-    @Implementation
-    public Drawable getBackground() {
-        return backgroundDrawable;
+        background = drawable;
     }
 
     /**
@@ -657,6 +664,13 @@ public class ShadowView {
             setId(id);
         }
     }
+    
+    private void applyTagAttribute() {
+    	 Object tag = attributeSet.getAttributeValue("android", "tag");
+         if (tag != null) {
+             setTag(tag);             
+         }
+	}
 
     private void applyVisibilityAttribute() {
         String visibility = attributeSet.getAttributeValue("android", "visibility");
@@ -683,20 +697,42 @@ public class ShadowView {
     }
 
     private void applyOnClickAttribute() {
-        final String methodName = attributeSet.getAttributeValue("android", "onClick");
-        if (methodName != null) {
-            setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View view) {
-                  try {
-                    final Method method = context.getClass().getMethod(methodName, View.class);
-                    method.invoke(context, view);
-                    
-                  } catch (Exception ex) {
-                    throw new RuntimeException("failed to invoke onClick method " + methodName, ex);
-                  }
-                }
-            });
+        final String handlerName = attributeSet.getAttributeValue("android",
+                                                                  "onClick");
+        if (handlerName == null) {
+            return;
         }
+
+        /* good part of following code has been directly copied from original
+         * android source */
+        setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Method mHandler;
+                try {
+                    mHandler = getContext().getClass().getMethod(handlerName,
+                                                                 View.class);
+                } catch (NoSuchMethodException e) {
+                    int id = getId();
+                    String idText = id == View.NO_ID ? "" : " with id '"
+                            + shadowOf(context).getResourceLoader()
+                                               .getNameForId(id) + "'";
+                    throw new IllegalStateException("Could not find a method " +
+                            handlerName + "(View) in the activity "
+                            + getContext().getClass() + " for onClick handler"
+                            + " on view " + realView.getClass() + idText, e);
+                }
+
+                try {
+                    mHandler.invoke(getContext(), realView);
+                } catch (IllegalAccessException e) {
+                    throw new IllegalStateException("Could not execute non "
+                            + "public method of the activity", e);
+                } catch (InvocationTargetException e) {
+                    throw new IllegalStateException("Could not execute "
+                            + "method of the activity", e);
+                }
+            }
+        });
     }
 
     private boolean noParentHasFocus(View view) {
@@ -705,6 +741,24 @@ public class ShadowView {
             view = (View) view.getParent();
         }
         return true;
+    }
+    
+    /**
+     * Non-android accessor.  Returns touch listener, if set.
+     * 
+     * @return
+     */
+    public View.OnTouchListener getOnTouchListener() {
+    	return onTouchListener;
+    }
+    
+    /**
+     * Non-android accessor.  Returns click listener, if set.
+     * 
+     * @return
+     */
+    public View.OnClickListener getOnClickListener() {
+    	return onClickListener;
     }
 
     @Implementation
@@ -730,5 +784,28 @@ public class ShadowView {
     @Implementation
     public void postDelayed(Runnable action, long delayMills) {
         Robolectric.getUiThreadScheduler().postDelayed(action, delayMills);
+    }
+    
+    @Implementation
+    public Animation getAnimation() {
+    	return animation;
+    }
+    
+    @Implementation
+    public void setAnimation(Animation anim) {
+    	animation = anim;
+    }
+    
+    @Implementation
+    public void startAnimation(Animation anim) {
+    	setAnimation(anim);
+    	animation.start();
+    }
+    
+    @Implementation
+    public void clearAnimation() {
+    	if ( animation != null ) {
+    		animation.cancel();
+    	}
     }
 }

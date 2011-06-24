@@ -22,7 +22,9 @@ public class ResourcesTest {
 
     @Test
     public void testConfiguration() {
-        assertThat(new Activity().getResources().getConfiguration(), notNullValue());
+        Configuration configuration = new Activity().getResources().getConfiguration();
+        assertThat(configuration, notNullValue());
+        assertThat(configuration.locale, notNullValue());
     }
 
     @Test
